@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hydra Noise Visual</title>
+  <script src="https://unpkg.com/hydra-synth"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* Nasconde le barre di scorrimento */
+      background: black;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block; /* Rimuove spazi bianchi extra */
+    }
+  </style>
+</head>
+<body>
+  <script>
+    // Inizializza Hydra
+    // detectAudio: false -> Non chiede il permesso per il microfono
+    const hydra = new Hydra({
+      detectAudio: false,
+      enableStreamCapture: false,
+    });
+
+    // Il tuo codice Hydra
+    noise(2, 0.1) 
+      .color(0.9, 0.9, 1)
+      .mult(
+        osc(10, 0.1, 1)
+        .color(1, 0.9, 0.8)
+      )
+      .modulate(
+        noise(2, 0.02), 0.5
+      ) 
+      .saturate(0.8) 
+      .brightness(0.3) 
+      .contrast(0.9)
+      .scrollX(0.00) 
+      .scrollY(0.00) 
+      .out();
+
+  </script>
+</body>
+</html>
