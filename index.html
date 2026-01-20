@@ -3,27 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Glimmers vs Triggers</title>
+  <title>Heavy Impact - Hydra & Webcam</title>
   <script src="https://unpkg.com/hydra-synth"></script>
   <style>
     body {
       margin: 0;
       overflow: hidden;
       background: black;
-      font-family: monospace;
+      font-family: Arial, sans-serif;
     }
     canvas {
       width: 100%;
       height: 100%;
       display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
     }
-    #overlay {
+    
+    /* Overlay per avviare webcam e audio */
+    #start-overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.9);
       color: white;
       display: flex;
       flex-direction: column;
@@ -34,63 +40,135 @@
       text-align: center;
       transition: opacity 0.5s;
     }
-    h1 { letter-spacing: 4px; text-transform: uppercase; }
+    
+    h1 {
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      font-size: 2rem;
+    }
     p { color: #aaa; margin-top: 10px; }
   </style>
 </head>
 <body>
 
-  <div id="overlay">
-    <h1>Clicca per avviare</h1>
-    <p>Muovi il mouse: Sinistra = Calma | Destra = Caos</p>
+  <div id="start-overlay">
+    <h1>CLICK TO INITIALIZE SYSTEM</h1>
+    <p>(Webcam & Audio Required)</p>
   </div>
 
   <script>
+    // 0. INIZIALIZZA HYDRA
     const hydra = new Hydra({
-      detectAudio: true,
+      detectAudio: true, // Abilita analisi audio (fft)
       enableStreamCapture: false,
     });
 
-    let tension = () => mouse.x / width;
+    // Variabili globali per lo script utente
+    var AudioContext = window.AudioContext || window.webkitAudioContext;
+    var audioCtx = new AudioContext();
+    var words = ["Have", "you", "ever", "wondered", "about", "a", "better", "version", "of", "you?"];
+    var lastWordIndex = -1;
+    
+    // Setup Canvas Testo (nascosto, serve come source per s1)
+    var textCanvas = document.createElement("canvas");
+    textCanvas.width = 1000; 
+    textCanvas.height = 1000;
+    var ctx = textCanvas.getContext("2d");
 
-    osc(
-      () => 20 + (tension() * 60), 
-      () => 0.05 + (tension() * 0.2) + (a.fft[2]*tension()), 
-      () => 0.5 + (tension() * 5)
-    )
-    .rotate(
-      () => time * 0.1, 
-      () => a.fft[0] * 0.5 * (1 - tension()) 
-    )
-    .kaleid(() => 2 + (tension() * 10)) 
-    .modulate(
-      noise(
-        () => 2 + (tension() * 10), 
-        0.1 
-      ),
-      () => (tension() * 1.5) + (a.fft[3] * tension() * 5) 
-    )
-    .invert(() => (a.fft[2] > 0.4 && tension() > 0.8) ? 1 : 0)
-    .contrast(() => 1 + tension()) 
-    .brightness(() => 0.5 - (tension() * 0.2)) 
-    .pixelate(
-      () => 2000 - (tension() * 1950), 
-      () => 2000 - (tension() * 1950)
-    )
-    .blend(o0, () => 0.1 + (tension() * 0.8)) 
-    .out(o0);
-
-    // Gestione click per attivare audio
-    document.getElementById('overlay').addEventListener('click', function() {
-      a.show();
-      a.setBins(4);
-      a.settings[0].cutoff = 1;
+    // --- 1. AUDIO ENGINE (HEAVY IMPACT) ---
+    function playHeavySound() {
+      if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+      var t = audioCtx.currentTime;
       
+      // SUB-BASS
+      var subOsc = audioCtx.createOscillator();
+      var subGain = audioCtx.createGain();
+      subOsc.type = "sine";
+      subOsc.frequency.setValueAtTime(70, t);
+      subOsc.frequency.exponentialRampToValueAtTime(10, t + 1.5);
+      subGain.gain.setValueAtTime(0, t);
+      subGain.gain.linearRampToValueAtTime(1.0, t + 0.02);
+      subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+      subOsc.connect(subGain); subGain.connect(audioCtx.destination);
+      subOsc.start(t); subOsc.stop(t + 1.5);
+
+      // DISTORTION
+      var gritOsc = audioCtx.createOscillator();
+      var gritGain = audioCtx.createGain();
+      gritOsc.type = "square";
+      gritOsc.frequency.setValueAtTime(50, t);
+      gritOsc.frequency.linearRampToValueAtTime(20, t + 0.3);
+      gritGain.gain.setValueAtTime(0.15, t); 
+      gritGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      gritOsc.connect(gritGain); gritGain.connect(audioCtx.destination);
+      gritOsc.start(t); gritOsc.stop(t + 0.4);
+    }
+
+    // --- GESTIONE START (CLICK) ---
+    document.getElementById('start-overlay').addEventListener('click', function() {
+      // 1. Attiva Webcam
+      s0.initCam(); 
+      
+      // 2. Collega il canvas testo a s1
+      s1.init({src: textCanvas});
+
+      // 3. Nascondi Overlay
       this.style.opacity = 0;
-      setTimeout(() => {
-        this.style.display = 'none';
-      }, 500);
+      setTimeout(() => { this.style.display = 'none'; }, 500);
+
+      // 4. LOGICA UTENTE (Definita dentro l'evento per sicurezza)
+      
+      // Funzione UPDATE (Hydra la chiama ogni frame)
+      update = () => {
+        var textSpeed = 0.8;
+        var wordIndex = Math.floor(time * textSpeed) % words.length;
+        
+        if (wordIndex !== lastWordIndex) {
+          playHeavySound();
+          lastWordIndex = wordIndex;
+        }
+
+        // Disegno sul canvas
+        ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+        
+        // Sfondo trasparente, testo bianco
+        ctx.fillStyle = "white";
+        ctx.font = "bold 150px Arial"; // Aumentato un po' font size
+        ctx.textAlign = "center"; 
+        ctx.textBaseline = "middle";
+        ctx.fillText(words[wordIndex], textCanvas.width / 2, textCanvas.height / 2);
+      }
+
+      // --- 5. COMPOSIZIONE HYDRA ---
+
+      // OUTPUT o0: WEBCAM PULITA (Statica)
+      src(s0).out(o0);
+
+      // OUTPUT o1: WEBCAM CORROTTA (Statica con effetti)
+      src(s0)
+        .saturate(0)         // Bianco e nero (parametro corretto da 2 a 0 per B/N vero)
+        .contrast(1.8)       // Contrasto alto
+        .brightness(-0.1)    // Scuro
+        // Deformazione audio (a.fft richiede detectAudio: true)
+        .modulate(noise(2, 0.4), () => 0.1 + (a.fft[0]*0.4)) 
+        .posterize(3, 1) 
+        .out(o1);
+
+      // OUTPUT o2: IL MIX FINALE
+      src(o0)              // 1. Webcam normale sotto
+        .layer(            // 2. Webcam corrotta sopra...
+          src(o1),         
+          // MASCHERA: shape(2) è una linea/ellisse. scrollX(10) la fa muovere velocissima
+          shape(2, 1.0).scrollX(10) 
+        )
+        .layer(            // 3. Testo sopra tutto
+          src(s1).luma(0.5, 0.01).color(1,1,1)
+        )
+        .out(o2);            
+
+      render(o2);
     });
+
   </script>
 </body>
 </html>
