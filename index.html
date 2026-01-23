@@ -1,224 +1,188 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Heavy Impact - Face Glitch FIXED</title>
-  
-  <script src="https://unpkg.com/hydra-synth"></script>
-  <script src="https://cdn.jsdelivr.net/npm/clmtrackr@1.1.2/clmtrackr.min.js"></script>
-  
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: black;
-      font-family: Arial, sans-serif;
-    }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 1;
-    }
-    
-    #start-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.95);
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999; /* Z-index altissimo per stare sopra a tutto */
-      cursor: pointer;
-      text-align: center;
-      transition: opacity 0.5s;
-    }
-    
-    h1 {
-      letter-spacing: 5px;
-      text-transform: uppercase;
-      font-size: 2rem;
-      color: #ff3333;
-      pointer-events: none; /* Il click passa al div */
-    }
-    p { color: #aaa; margin-top: 10px; pointer-events: none; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Substance - Hydra Visualization</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: black; overflow: hidden; }
+        canvas { width: 100%; height: 100%; display: block; }
+        
+        /* Overlay per avviare audio/video (necessario per i browser moderni) */
+        #start-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            font-size: 2rem;
+            z-index: 10;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+    </style>
+    <script src="https://unpkg.com/hydra-synth"></script>
 </head>
 <body>
 
-  <div id="start-overlay">
-    <h1>CLICK TO INITIALIZE SYSTEM</h1>
-    <p>(Richiede Webcam & Audio - Usa Live Server)</p>
-  </div>
+    <div id="start-overlay">
+        > Clicca per attivare la Sostanza <
+    </div>
 
-  <script>
-    // --- SETUP INIZIALE ---
-    const hydra = new Hydra({
-      detectAudio: true,
-      enableStreamCapture: false,
-    });
-
-    var AudioContext = window.AudioContext || window.webkitAudioContext;
-    var audioCtx = new AudioContext();
-    var words = ["HAVE", "YOU", "EVER", "SEEN", "THE", "REAL", "VERSION", "OF", "YOUR", "SELF?"];
-    var lastWordIndex = -1;
-    
-    // Canvas Testo/Faccia
-    var textCanvas = document.createElement("canvas");
-    textCanvas.width = 1280; 
-    textCanvas.height = 720;
-    var ctx = textCanvas.getContext("2d");
-
-    // Face Tracker Setup
-    var ctracker = new clmtrackr.tracker();
-    ctracker.init();
-    var facePositions = false;
-    var showFaceGlitch = false;
-    var trackerRunning = false;
-
-    // --- AUDIO ENGINE ---
-    function playHeavySound() {
-      if (audioCtx.state === 'suspended') { audioCtx.resume(); }
-      var t = audioCtx.currentTime;
-      
-      var subOsc = audioCtx.createOscillator();
-      var subGain = audioCtx.createGain();
-      subOsc.type = "sawtooth";
-      subOsc.frequency.setValueAtTime(60, t);
-      subOsc.frequency.exponentialRampToValueAtTime(10, t + 1.0);
-      subGain.gain.setValueAtTime(0, t);
-      subGain.gain.linearRampToValueAtTime(0.8, t + 0.05);
-      subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
-      subOsc.connect(subGain); subGain.connect(audioCtx.destination);
-      subOsc.start(t); subOsc.stop(t + 1.0);
-
-      var gritOsc = audioCtx.createOscillator();
-      var gritGain = audioCtx.createGain();
-      gritOsc.type = "square";
-      gritOsc.frequency.setValueAtTime(100, t);
-      gritOsc.frequency.linearRampToValueAtTime(30, t + 0.2);
-      gritGain.gain.setValueAtTime(0.2, t); 
-      gritGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-      gritOsc.connect(gritGain); gritGain.connect(audioCtx.destination);
-      gritOsc.start(t); gritOsc.stop(t + 0.2);
-    }
-
-    // --- GESTIONE CLICK E AVVIO ---
-    document.getElementById('start-overlay').addEventListener('click', function() {
-      console.log("Sistema avviato...");
-      
-      // 1. Nascondi Overlay subito
-      this.style.opacity = 0;
-      setTimeout(() => { this.style.display = 'none'; }, 500);
-
-      // 2. Avvia Audio e Hydra
-      audioCtx.resume();
-      s0.initCam(); // Chiede permesso webcam
-      s1.init({src: textCanvas});
-
-      // 3. Tenta di agganciare il Face Tracker (Sistema robusto)
-      // Controlliamo ogni mezzo secondo se il video <video> esiste
-      var checkVideoInterval = setInterval(function() {
-          var videoElement = document.querySelector("video");
-          if (videoElement && videoElement.readyState >= 2) {
-              console.log("Webcam trovata, avvio tracker...");
-              ctracker.start(videoElement);
-              trackerRunning = true;
-              clearInterval(checkVideoInterval); // Smetti di cercare
-          } else {
-              console.log("In attesa della webcam...");
-          }
-      }, 500);
-
-      // 4. LOOP VISIVO (UPDATE)
-      update = () => {
-        var textSpeed = 0.7;
-        var wordIndex = Math.floor(time * textSpeed) % words.length;
+    <script>
+        // 1. SETUP INIZIALE
+        const overlay = document.getElementById('start-overlay');
         
-        if (wordIndex !== lastWordIndex) {
-          playHeavySound();
-          lastWordIndex = wordIndex;
-          showFaceGlitch = Math.random() > 0.7; 
+        // Inizializza Hydra nel body
+        const hydra = new Hydra({
+            detectAudio: false,
+            enableStreamCapture: false,
+        });
+
+        // Variabili Globali
+        let ctxAudio;
+        let imgText = new Image(); // L'immagine che conterrà l'SVG
+        let words = "HAVE YOU EVER DREAMED OF A BETTER VERSION OF YOURSELF ?".split(" ");
+        let lastIndex = -1;
+        let speed = 1.1;
+        let triggerDreamFlash = 0;
+        let startTime = Date.now();
+
+        // 2. FUNZIONE AUDIO (THE SUBSTANCE NOISE)
+        function initAudio() {
+            ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        ctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
-        
-        // Se il tracker sta funzionando, prendi i dati
-        if (trackerRunning) {
-            facePositions = ctracker.getCurrentPosition();
+        function playSubstanceNoise() {
+            if (!ctxAudio) return;
+            if (ctxAudio.state === 'suspended') ctxAudio.resume();
+            
+            const osc = ctxAudio.createOscillator();
+            const gain = ctxAudio.createGain();
+            
+            // Suono Sawtooth (dente di sega) profondo
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(55, ctxAudio.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(15, ctxAudio.currentTime + 0.25);
+            
+            gain.gain.setValueAtTime(0.4, ctxAudio.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctxAudio.currentTime + 0.25);
+            
+            osc.connect(gain);
+            gain.connect(ctxAudio.destination);
+            osc.start();
+            osc.stop(ctxAudio.currentTime + 0.25);
         }
 
-        // Logica disegno Faccia
-        if (facePositions && showFaceGlitch) {
-             var leftEye = facePositions[27];
-             var rightEye = facePositions[32];
-             var mouth = facePositions[60];
+        // 3. GENERATORE SVG
+        function updateSVGText(word) {
+            // Definiamo l'SVG come stringa.
+            // NOTA: I font esterni dentro un <img> SVG spesso vengono bloccati dai browser per sicurezza.
+            // Usiamo un font-stack robusto (Impact, Arial Black) che simula lo stile se il fetch fallisce.
+            const svgString = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+                    .text { 
+                        font-family: 'Bebas Neue', Impact, 'Arial Black', sans-serif; 
+                        fill: white; 
+                        font-size: 250px; 
+                        text-anchor: middle; 
+                        dominant-baseline: middle; 
+                    }
+                </style>
+                <rect width="100%" height="100%" fill="transparent" />
+                <text x="50%" y="50%" class="text">${word}</text>
+            </svg>`;
 
-             ctx.fillStyle = "red";
-             ctx.strokeStyle = "white";
-             ctx.lineWidth = 5;
-
-             if(leftEye) {
-                 ctx.beginPath();
-                 ctx.arc(leftEye[0], leftEye[1], 30, 0, 2 * Math.PI);
-                 ctx.fill(); ctx.stroke();
-             }
-             if(rightEye) {
-                 ctx.beginPath();
-                 ctx.arc(rightEye[0], rightEye[1], 30, 0, 2 * Math.PI);
-                 ctx.fill(); ctx.stroke();
-             }
-             if(mouth) {
-                 ctx.fillStyle = "white";
-                 ctx.fillRect(mouth[0] - 50, mouth[1] - 10, 100, 20);
-             }
+            // Convertiamo la stringa SVG in un Blob URL
+            const blob = new Blob([svgString], {type: 'image/svg+xml'});
+            const url = URL.createObjectURL(blob);
+            
+            // Aggiorniamo l'immagine sorgente
+            const newImg = new Image();
+            newImg.onload = () => {
+                imgText = newImg; // Scambiamo l'immagine solo quando è pronta
+                URL.revokeObjectURL(url); // Pulizia memoria
+            };
+            newImg.src = url;
         }
 
-        // Disegno Testo
-        ctx.fillStyle = "white";
-        var shakeX = (Math.random() - 0.5) * (a.fft[0] * 50);
-        var shakeY = (Math.random() - 0.5) * (a.fft[0] * 50);
-        ctx.font = "900 100px Arial"; 
-        ctx.textAlign = "center"; 
-        ctx.textBaseline = "middle";
-        ctx.fillText(words[wordIndex], (textCanvas.width / 2) + shakeX, (textCanvas.height / 2) + shakeY);
-      }
+        // 4. LOGICA DI AGGIORNAMENTO (LOOP)
+        // Usiamo una funzione custom che viene chiamata ogni frame da Hydra o esternamente
+        function logicUpdate(time) {
+            let index = Math.floor(time * speed) % words.length;
+            
+            if (index !== lastIndex) {
+                let currentWord = words[index];
+                
+                // Aggiorna SVG
+                updateSVGText(currentWord);
+                
+                // Logica Trigger Flash
+                if (currentWord === "DREAMED") {
+                    triggerDreamFlash = 1;
+                } else {
+                    triggerDreamFlash = 0;
+                }
+                
+                // Suona
+                playSubstanceNoise();
+                
+                lastIndex = index;
+            }
+        }
 
-      // --- HYDRA PATCH ---
-      src(s0).out(o0); // Webcam pulita
+        // 5. CLICK HANDLER (AVVIO)
+        overlay.addEventListener('click', () => {
+            overlay.style.display = 'none';
+            initAudio();
+            s0.initCam(); // Avvia la webcam
+            
+            // Inizializza s1 con l'immagine dinamica
+            s1.init({ src: () => imgText, dynamic: true });
 
-      // Layer Glitch
-      src(s0)
-        .colorama(0.8)
-        .hue(() => time * 0.2)
-        .saturate(2)
-        .contrast(1.5)
-        .modulate(noise(3, 0.5), () => 0.2 + (a.fft[0]*0.5)) 
-        .kaleid(1)
-        .out(o1);
+            // --- CODICE VISUALE HYDRA ---
+            
+            // Definiamo la "Mutazione" (sfondo)
+            viscere = src(s0)
+                .saturate(3)
+                .modulate(noise(4, 0.2)) 
+                .color(0.5, 1, 0.5) 
+                .kaleid(1) 
 
-      // Compositing
-      src(o0)
-        .layer(
-          src(o1).mask(shape(4, 0.8).scrollX(20).scrollY(5).kaleid(2))
-        )
-        .layer(
-          src(s1).luma(0.5, 0.01).color(1, 1, 1)  
-        )
-        .modulateScale(osc(10, 0.1), 0.01)
-        .out(o2);            
+            // Definiamo il "Soggetto" (Tu)
+            soggetto = src(s0)
+                .contrast(2) 
+                .brightness(-0.2)
+                .modulate(noise(1, 0.1), 0.1)
+                .blend(o0, 0.4)
 
-      render(o2);
-    });
-  </script>
+            // Effetto Testo
+            testoEffect = src(s1)
+                // Applica invert solo se triggerDreamFlash è 1
+                .invert(() => triggerDreamFlash * (Math.sin(time * 50) > 0 ? 1 : 0))
+                .scale(1.05)
+
+            // Composizione
+            viscere
+                .layer(soggetto.luma(0.4, 0.1)) 
+                .layer(testoEffect.luma(0.5, 0.01)) 
+                .out()
+            
+            // Aggancia la nostra logica custom al loop di rendering di Hydra
+            // Hydra ha una variabile globale 'time' che scorre
+            const oldUpdate = update; // Salviamo eventuale update esistente
+            update = (dt) => {
+                if(oldUpdate) oldUpdate(dt);
+                logicUpdate(time); // Chiamiamo la nostra logica usando il tempo di Hydra
+            }
+        });
+
+    </script>
 </body>
 </html>
