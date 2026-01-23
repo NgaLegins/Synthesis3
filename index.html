@@ -3,56 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Substance - Hydra Visualization</title>
+    <title>The Substance - Hydra Final</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+
     <style>
         body { margin: 0; padding: 0; background-color: black; overflow: hidden; }
         canvas { width: 100%; height: 100%; display: block; }
         
-        /* Overlay per avviare audio/video (necessario per i browser moderni) */
+        /* Canvas nascosto che useremo per generare il testo */
+        #text-canvas {
+            display: none; /* Non lo mostriamo direttamente, lo passiamo a Hydra */
+        }
+
         #start-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: black;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            font-family: 'Arial', sans-serif;
-            font-size: 2rem;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3rem;
             z-index: 10;
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 2px;
+            transition: opacity 0.5s;
         }
+        #start-overlay p { margin: 0; font-size: 1.2rem; font-family: sans-serif; opacity: 0.7; margin-top: 10px;}
     </style>
     <script src="https://unpkg.com/hydra-synth"></script>
 </head>
 <body>
 
     <div id="start-overlay">
-        > Clicca per attivare la Sostanza <
+        CLICCA PER INIZIARE
+        <p>Attiva webcam e audio</p>
     </div>
 
+    <canvas id="text-canvas" width="1920" height="1080"></canvas>
+
     <script>
-        // 1. SETUP INIZIALE
         const overlay = document.getElementById('start-overlay');
-        
-        // Inizializza Hydra nel body
+        const textCanvas = document.getElementById('text-canvas');
+        const textCtx = textCanvas.getContext('2d');
+
+        // Inizializza Hydra
         const hydra = new Hydra({
             detectAudio: false,
             enableStreamCapture: false,
         });
 
-        // Variabili Globali
+        // VARIABILI GLOBALI
         let ctxAudio;
-        let imgText = new Image(); // L'immagine che conterrà l'SVG
         let words = "HAVE YOU EVER DREAMED OF A BETTER VERSION OF YOURSELF ?".split(" ");
         let lastIndex = -1;
         let speed = 1.1;
         let triggerDreamFlash = 0;
-        let startTime = Date.now();
 
-        // 2. FUNZIONE AUDIO (THE SUBSTANCE NOISE)
+        // 1. GESTIONE AUDIO
         function initAudio() {
             ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
         }
@@ -64,122 +78,108 @@
             const osc = ctxAudio.createOscillator();
             const gain = ctxAudio.createGain();
             
-            // Suono Sawtooth (dente di sega) profondo
+            // Suono Sawtooth aggressivo
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(55, ctxAudio.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(15, ctxAudio.currentTime + 0.25);
+            osc.frequency.exponentialRampToValueAtTime(10, ctxAudio.currentTime + 0.3);
             
-            gain.gain.setValueAtTime(0.4, ctxAudio.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctxAudio.currentTime + 0.25);
+            gain.gain.setValueAtTime(0.35, ctxAudio.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctxAudio.currentTime + 0.3);
             
             osc.connect(gain);
             gain.connect(ctxAudio.destination);
             osc.start();
-            osc.stop(ctxAudio.currentTime + 0.25);
+            osc.stop(ctxAudio.currentTime + 0.35);
         }
 
-        // 3. GENERATORE SVG
-        function updateSVGText(word) {
-            // Definiamo l'SVG come stringa.
-            // NOTA: I font esterni dentro un <img> SVG spesso vengono bloccati dai browser per sicurezza.
-            // Usiamo un font-stack robusto (Impact, Arial Black) che simula lo stile se il fetch fallisce.
-            const svgString = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">
-                <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-                    .text { 
-                        font-family: 'Bebas Neue', Impact, 'Arial Black', sans-serif; 
-                        fill: white; 
-                        font-size: 250px; 
-                        text-anchor: middle; 
-                        dominant-baseline: middle; 
-                    }
-                </style>
-                <rect width="100%" height="100%" fill="transparent" />
-                <text x="50%" y="50%" class="text">${word}</text>
-            </svg>`;
-
-            // Convertiamo la stringa SVG in un Blob URL
-            const blob = new Blob([svgString], {type: 'image/svg+xml'});
-            const url = URL.createObjectURL(blob);
+        // 2. FUNZIONE DISEGNO TESTO
+        function drawText(word) {
+            // Pulisce il canvas
+            textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
             
-            // Aggiorniamo l'immagine sorgente
-            const newImg = new Image();
-            newImg.onload = () => {
-                imgText = newImg; // Scambiamo l'immagine solo quando è pronta
-                URL.revokeObjectURL(url); // Pulizia memoria
-            };
-            newImg.src = url;
+            // Impostazioni Font
+            textCtx.font = "250px 'Bebas Neue'";
+            textCtx.fillStyle = "white";
+            textCtx.textAlign = "center";
+            textCtx.textBaseline = "middle";
+            
+            // Disegna
+            textCtx.fillText(word, textCanvas.width / 2, textCanvas.height / 2);
         }
 
-        // 4. LOGICA DI AGGIORNAMENTO (LOOP)
-        // Usiamo una funzione custom che viene chiamata ogni frame da Hydra o esternamente
+        // 3. LOGICA DI LOOP (Chiamata da Hydra)
         function logicUpdate(time) {
+            // Calcolo indice parola
             let index = Math.floor(time * speed) % words.length;
             
+            // Se è cambiata la parola rispetto al frame precedente
             if (index !== lastIndex) {
                 let currentWord = words[index];
                 
-                // Aggiorna SVG
-                updateSVGText(currentWord);
+                // 1. Disegna la nuova parola sul canvas nascosto
+                drawText(currentWord);
                 
-                // Logica Trigger Flash
+                // 2. Logica Trigger Flash per "DREAMED"
                 if (currentWord === "DREAMED") {
                     triggerDreamFlash = 1;
                 } else {
                     triggerDreamFlash = 0;
                 }
                 
-                // Suona
+                // 3. Suono
                 playSubstanceNoise();
                 
                 lastIndex = index;
             }
         }
 
-        // 5. CLICK HANDLER (AVVIO)
-        overlay.addEventListener('click', () => {
-            overlay.style.display = 'none';
-            initAudio();
-            s0.initCam(); // Avvia la webcam
-            
-            // Inizializza s1 con l'immagine dinamica
-            s1.init({ src: () => imgText, dynamic: true });
+        // 4. AVVIO AL CLICK
+        overlay.addEventListener('click', async () => {
+            // Nascondi overlay
+            overlay.style.opacity = 0;
+            setTimeout(() => overlay.style.display = 'none', 500);
 
-            // --- CODICE VISUALE HYDRA ---
+            // Avvia Audio e Video
+            initAudio();
+            s0.initCam(); 
             
-            // Definiamo la "Mutazione" (sfondo)
+            // Inizializza la texture s1 collegandola al canvas del testo
+            s1.init({ src: textCanvas });
+
+            // --- CODICE VISIVO HYDRA ---
+            
+            // Sfondo (Viscere)
             viscere = src(s0)
                 .saturate(3)
                 .modulate(noise(4, 0.2)) 
                 .color(0.5, 1, 0.5) 
                 .kaleid(1) 
 
-            // Definiamo il "Soggetto" (Tu)
+            // Soggetto (Tu)
             soggetto = src(s0)
                 .contrast(2) 
                 .brightness(-0.2)
                 .modulate(noise(1, 0.1), 0.1)
                 .blend(o0, 0.4)
 
-            // Effetto Testo
+            // Effetto Testo (prende s1 che contiene il canvas)
             testoEffect = src(s1)
-                // Applica invert solo se triggerDreamFlash è 1
-                .invert(() => triggerDreamFlash * (Math.sin(time * 50) > 0 ? 1 : 0))
-                .scale(1.05)
+                // Inverte colori velocemente SOLO se triggerDreamFlash == 1
+                .invert(() => triggerDreamFlash * (Math.sin(time * 60) > 0 ? 1 : 0))
+                .scale(1.05) // Leggero ingrandimento fisso per impatto
 
-            // Composizione
+            // Composizione Finale
             viscere
-                .layer(soggetto.luma(0.4, 0.1)) 
-                .layer(testoEffect.luma(0.5, 0.01)) 
+                .layer(soggetto.luma(0.4, 0.1)) // Ritaglia soggetto su viscere
+                .layer(testoEffect.luma(0.5, 0.01)) // Ritaglia testo bianco sopra tutto
                 .out()
             
-            // Aggancia la nostra logica custom al loop di rendering di Hydra
-            // Hydra ha una variabile globale 'time' che scorre
-            const oldUpdate = update; // Salviamo eventuale update esistente
+            // --- LOOP ---
+            // Sovrascriviamo la funzione update di Hydra per inserire la nostra logica
+            const oldUpdate = update;
             update = (dt) => {
+                logicUpdate(time); // Aggiorna testo e audio
                 if(oldUpdate) oldUpdate(dt);
-                logicUpdate(time); // Chiamiamo la nostra logica usando il tempo di Hydra
             }
         });
 
